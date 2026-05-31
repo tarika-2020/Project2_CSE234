@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+
+Project__export.zip
+project_export/
+
+artifacts/prepared/
