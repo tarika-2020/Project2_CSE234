@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+.venv_cuda/
 .hf_cache/
 
 Project__export.zip
@@ -11,3 +12,4 @@ artifacts/*_venv.*
 artifacts/smoke_*.json
 artifacts/tiny_*.jsonl
 artifacts/tiny_adapter/
+artifacts/runs/

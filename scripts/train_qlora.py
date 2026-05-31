@@ -42,6 +42,7 @@ def main() -> None:
     parser.add_argument("--train_file", required=True)
     parser.add_argument("--eval_file", required=True)
     parser.add_argument("--output_dir", default="./adapter")
+    parser.add_argument("--resume_from_checkpoint", default=None)
     parser.add_argument("--base_model", default="Qwen/Qwen2.5-1.5B-Instruct")
     parser.add_argument("--learning_rate", type=float, default=2e-4)
     parser.add_argument("--num_train_epochs", type=float, default=3.0)
@@ -51,6 +52,8 @@ def main() -> None:
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.05)
     parser.add_argument("--max_seq_length", type=int, default=2048)
+    parser.add_argument("--max_steps", type=int, default=-1)
+    parser.add_argument("--save_steps", type=int, default=50)
     parser.add_argument("--load_in_4bit", action="store_true")
     parser.add_argument("--bf16", action="store_true")
     parser.add_argument("--target_modules", default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
@@ -101,12 +104,14 @@ def main() -> None:
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
         num_train_epochs=args.num_train_epochs,
+        max_steps=args.max_steps,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         max_length=args.max_seq_length,
         logging_steps=10,
         eval_strategy="epoch",
-        save_strategy="epoch",
+        save_strategy="steps" if args.max_steps > 0 else "epoch",
+        save_steps=args.save_steps,
         report_to=[],
         bf16=args.bf16 if not use_cpu else False,
         fp16=False,
@@ -121,7 +126,7 @@ def main() -> None:
         processing_class=tokenizer,
         peft_config=peft_config,
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     trainer.model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
 
