@@ -79,6 +79,7 @@ def write_jsonl(path: str, examples: Iterable[PreparedExample]) -> None:
                 "db_id": example.db_id,
                 "prompt": example.prompt,
                 "target": example.target,
+                "completion": example.target,
                 "text": f"{example.prompt}\n{example.target}",
                 "messages": [
                     {"role": "system", "content": SYSTEM_INSTRUCTION},

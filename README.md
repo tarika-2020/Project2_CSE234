@@ -18,7 +18,17 @@ Submission-ready schema-linking pipeline for CSE/DSC 234 Project 2.
 
 ## Install
 
-Create an environment and install:
+Validated local setup for this repo uses Python `3.11` via:
+
+```bash
+C:\Users\Admin\miniconda3\envs\biomni_e1\python.exe -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip setuptools wheel
+.\.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+Then run commands with `.\.venv\Scripts\python`.
+
+Minimal install command:
 
 ```bash
 pip install -r requirements.txt
@@ -31,8 +41,16 @@ Recommended packages for the intended training/inference path:
 - `peft`
 - `trl`
 - `datasets`
+- `accelerate`
+- `bitsandbytes`
+- `sentencepiece`
 
 If these packages are not installed, `main.py` still runs with a deterministic heuristic fallback so the interface remains testable.
+
+Current environment note:
+
+- The validated `.venv` on this machine imports the full stack successfully.
+- The installed Torch build is currently CPU-only, so training works in CPU mode here unless a CUDA-enabled Torch build is installed in an environment with visible NVIDIA drivers.
 
 ## Runtime Contract
 
@@ -66,7 +84,7 @@ Important runtime behavior:
 Build filtered-schema and full-schema JSONL datasets:
 
 ```bash
-python scripts/prepare_data.py
+.\.venv\Scripts\python scripts/prepare_data.py
 ```
 
 This writes files under `artifacts/prepared/`, including:
@@ -81,7 +99,7 @@ This writes files under `artifacts/prepared/`, including:
 Example command:
 
 ```bash
-python scripts/train_qlora.py \
+.\.venv\Scripts\python scripts/train_qlora.py \
   --train_file artifacts/prepared/train_filtered.jsonl \
   --eval_file artifacts/prepared/validation_filtered.jsonl \
   --output_dir adapter \
@@ -93,6 +111,8 @@ Notes:
 
 - The default base model is `Qwen/Qwen2.5-1.5B-Instruct`.
 - `--load_in_4bit` enables the intended QLoRA path and requires `bitsandbytes`.
+- On a CPU-only machine, omit `--bf16` and expect a slow fallback training path.
+- The training script redirects `HF_HOME`, hub cache, and datasets cache into repo-local `.hf_cache/` so it does not depend on profile-level write access.
 - The script expects the HuggingFace model to be accessible from the environment where training runs.
 - If HuggingFace access requires authentication, log in before training or inference.
 
@@ -101,7 +121,7 @@ Notes:
 Write the planned experiment matrix for the report:
 
 ```bash
-python scripts/generate_experiment_configs.py
+.\.venv\Scripts\python scripts/generate_experiment_configs.py
 ```
 
 This creates JSON config stubs under `artifacts/experiment_configs/`.
@@ -111,7 +131,7 @@ This creates JSON config stubs under `artifacts/experiment_configs/`.
 Generate predictions and score them with the provided grader:
 
 ```bash
-python scripts/run_validation.py
+.\.venv\Scripts\python scripts/run_validation.py
 ```
 
 This writes:
@@ -122,7 +142,7 @@ This writes:
 Inspect the hardest failures by question and database:
 
 ```bash
-python scripts/diagnose_predictions.py \
+.\.venv\Scripts\python scripts/diagnose_predictions.py \
   --predictions artifacts/validation_predictions.json \
   --per_question artifacts/per_question.csv
 ```

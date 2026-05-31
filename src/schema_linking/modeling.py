@@ -77,6 +77,9 @@ def build_generation_backend(base_model: str, adapter_dir: str, max_new_tokens: 
         transformers_ok = importlib.util.find_spec("transformers") is not None
         if not transformers_ok:
             return HeuristicBackend()
+        adapter_config = os.path.join(adapter_dir, "adapter_config.json")
+        if not os.path.exists(adapter_config):
+            return HeuristicBackend()
         return TransformersBackend(base_model=base_model, adapter_dir=adapter_dir, max_new_tokens=max_new_tokens)
     except Exception:
         return HeuristicBackend()

@@ -19,6 +19,11 @@ from schema_linking.retrieval import SchemaLinkRetriever, merge_predictions
 from schema_linking.schema_utils import load_schema
 
 
+def load_json_file(path: str):
+    with open(path, encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
 def predict_question(question: str, db_id: str, schema, backend, retriever) -> Dict[str, List[str]]:
     filtered = filter_schema(question, schema)
     prompt = build_prompt(question, db_id, schema, filtered)
@@ -51,8 +56,7 @@ def main() -> None:
     parser.add_argument("--train_data", default="./train.json")
     args = parser.parse_args()
 
-    with open(args.input, encoding="utf-8") as f:
-        items = json.load(f)
+    items = load_json_file(args.input)
 
     backend = build_generation_backend(
         base_model=args.base_model,

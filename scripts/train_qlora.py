@@ -1,6 +1,11 @@
 import argparse
 import json
 import os
+import subprocess
+import sys
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def require_package(name: str) -> None:
@@ -10,7 +15,29 @@ def require_package(name: str) -> None:
         raise RuntimeError(f"Missing required package: {name}")
 
 
+def ensure_utf8_mode() -> None:
+    if sys.flags.utf8_mode:
+        return
+    if os.environ.get("PROJECT2_UTF8_REEXEC") == "1":
+        return
+    env = os.environ.copy()
+    env["PROJECT2_UTF8_REEXEC"] = "1"
+    cmd = [sys.executable, "-X", "utf8", *sys.argv]
+    raise SystemExit(subprocess.call(cmd, env=env, cwd=os.getcwd()))
+
+
+def ensure_local_hf_cache() -> None:
+    cache_root = os.path.join(ROOT, ".hf_cache")
+    os.makedirs(cache_root, exist_ok=True)
+    os.environ.setdefault("HF_HOME", cache_root)
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", os.path.join(cache_root, "hub"))
+    os.environ.setdefault("HF_DATASETS_CACHE", os.path.join(cache_root, "datasets"))
+
+
 def main() -> None:
+    ensure_utf8_mode()
+    ensure_local_hf_cache()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_file", required=True)
     parser.add_argument("--eval_file", required=True)
@@ -37,6 +64,7 @@ def main() -> None:
     from peft import LoraConfig, prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
+    import torch
 
     dataset = load_dataset("json", data_files={"train": args.train_file, "eval": args.eval_file})
     tokenizer = AutoTokenizer.from_pretrained(args.base_model, trust_remote_code=True)
@@ -53,12 +81,13 @@ def main() -> None:
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype="bfloat16" if args.bf16 else "float16",
+            bnb_4bit_compute_dtype=torch.bfloat16 if args.bf16 else torch.float16,
         )
 
     model = AutoModelForCausalLM.from_pretrained(args.base_model, **model_kwargs)
     if args.load_in_4bit:
         model = prepare_model_for_kbit_training(model)
+    use_cpu = not torch.cuda.is_available()
 
     peft_config = LoraConfig(
         r=args.lora_r,
@@ -74,12 +103,15 @@ def main() -> None:
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
-        max_seq_length=args.max_seq_length,
+        max_length=args.max_seq_length,
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
         report_to=[],
-        bf16=args.bf16,
+        bf16=args.bf16 if not use_cpu else False,
+        fp16=False,
+        use_cpu=use_cpu,
+        dataset_text_field="text",
     )
     trainer = SFTTrainer(
         model=model,
@@ -88,7 +120,6 @@ def main() -> None:
         eval_dataset=dataset["eval"],
         processing_class=tokenizer,
         peft_config=peft_config,
-        dataset_text_field="text",
     )
     trainer.train()
     trainer.model.save_pretrained(args.output_dir)

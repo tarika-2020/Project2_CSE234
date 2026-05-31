@@ -1,7 +1,13 @@
 __pycache__/
 *.pyc
+.venv/
+.hf_cache/
 
 Project__export.zip
 project_export/
 
 artifacts/prepared/
+artifacts/*_venv.*
+artifacts/smoke_*.json
+artifacts/tiny_*.jsonl
+artifacts/tiny_adapter/
