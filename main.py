@@ -15,15 +15,18 @@ from schema_linking.filtering import filter_schema
 from schema_linking.heuristics import heuristic_schema_links
 from schema_linking.modeling import HeuristicBackend, build_generation_backend
 from schema_linking.prompting import build_prompt
+from schema_linking.retrieval import SchemaLinkRetriever, merge_predictions
 from schema_linking.schema_utils import load_schema
 
 
-def predict_question(question: str, db_id: str, schema, backend) -> Dict[str, List[str]]:
+def predict_question(question: str, db_id: str, schema, backend, retriever) -> Dict[str, List[str]]:
     filtered = filter_schema(question, schema)
     prompt = build_prompt(question, db_id, schema, filtered)
+    heuristic_links = heuristic_schema_links(question, schema, filtered)
+    retrieval_links = retriever.predict(question, db_id, schema, filtered) if retriever else {}
 
     if isinstance(backend, HeuristicBackend):
-        return heuristic_schema_links(question, schema, filtered)
+        return merge_predictions(retrieval_links, heuristic_links)
 
     generation = backend.generate([prompt])[0]
     try:
@@ -33,7 +36,7 @@ def predict_question(question: str, db_id: str, schema, backend) -> Dict[str, Li
             return cleaned
     except Exception:
         pass
-    return heuristic_schema_links(question, schema, filtered)
+    return merge_predictions(retrieval_links, heuristic_links)
 
 
 def main() -> None:
@@ -45,6 +48,7 @@ def main() -> None:
     parser.add_argument("--base_model", default="Qwen/Qwen2.5-1.5B-Instruct")
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--train_data", default="./train.json")
     args = parser.parse_args()
 
     with open(args.input, encoding="utf-8") as f:
@@ -55,13 +59,16 @@ def main() -> None:
         adapter_dir=args.adapter_dir,
         max_new_tokens=args.max_new_tokens,
     )
+    retriever = None
+    if os.path.exists(args.train_data):
+        retriever = SchemaLinkRetriever.from_json(args.train_data)
     schema_cache = {}
     predictions = []
     for item in items:
         db_id = item["db_id"]
         if db_id not in schema_cache:
             schema_cache[db_id] = load_schema(args.schemas_dir, db_id)
-        links = predict_question(item["question"], db_id, schema_cache[db_id], backend)
+        links = predict_question(item["question"], db_id, schema_cache[db_id], backend, retriever)
         predictions.append(
             {
                 "question_id": item["question_id"],

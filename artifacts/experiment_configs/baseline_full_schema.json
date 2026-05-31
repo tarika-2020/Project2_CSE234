@@ -1,0 +1,7 @@
+{
+  "name": "baseline_full_schema",
+  "dataset_variant": "full_schema",
+  "learning_rate": 0.0002,
+  "lora_r": 16,
+  "num_train_epochs": 3.0
+}

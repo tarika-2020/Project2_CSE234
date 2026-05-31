@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import sys
 
 
 def require_package(name: str) -> None:
@@ -25,15 +24,18 @@ def main() -> None:
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.05)
     parser.add_argument("--max_seq_length", type=int, default=2048)
+    parser.add_argument("--load_in_4bit", action="store_true")
+    parser.add_argument("--bf16", action="store_true")
+    parser.add_argument("--target_modules", default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
     parser.add_argument("--config_out", default=None)
     args = parser.parse_args()
 
-    for package in ("torch", "transformers", "peft", "trl"):
+    for package in ("torch", "transformers", "peft", "trl", "datasets"):
         require_package(package)
 
     from datasets import load_dataset
-    from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import LoraConfig, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
     dataset = load_dataset("json", data_files={"train": args.train_file, "eval": args.eval_file})
@@ -41,11 +43,22 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        args.base_model,
-        trust_remote_code=True,
-        device_map="auto",
-    )
+    model_kwargs = {
+        "trust_remote_code": True,
+        "device_map": "auto",
+    }
+    if args.load_in_4bit:
+        require_package("bitsandbytes")
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype="bfloat16" if args.bf16 else "float16",
+        )
+
+    model = AutoModelForCausalLM.from_pretrained(args.base_model, **model_kwargs)
+    if args.load_in_4bit:
+        model = prepare_model_for_kbit_training(model)
 
     peft_config = LoraConfig(
         r=args.lora_r,
@@ -53,6 +66,7 @@ def main() -> None:
         lora_dropout=args.lora_dropout,
         bias="none",
         task_type="CAUSAL_LM",
+        target_modules=[module.strip() for module in args.target_modules.split(",") if module.strip()],
     )
     training_args = SFTConfig(
         output_dir=args.output_dir,
@@ -65,6 +79,7 @@ def main() -> None:
         eval_strategy="epoch",
         save_strategy="epoch",
         report_to=[],
+        bf16=args.bf16,
     )
     trainer = SFTTrainer(
         model=model,

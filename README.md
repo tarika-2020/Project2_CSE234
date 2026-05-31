@@ -84,14 +84,27 @@ Example command:
 python scripts/train_qlora.py \
   --train_file artifacts/prepared/train_filtered.jsonl \
   --eval_file artifacts/prepared/validation_filtered.jsonl \
-  --output_dir adapter
+  --output_dir adapter \
+  --load_in_4bit \
+  --bf16
 ```
 
 Notes:
 
 - The default base model is `Qwen/Qwen2.5-1.5B-Instruct`.
+- `--load_in_4bit` enables the intended QLoRA path and requires `bitsandbytes`.
 - The script expects the HuggingFace model to be accessible from the environment where training runs.
 - If HuggingFace access requires authentication, log in before training or inference.
+
+## Generate Experiment Configs
+
+Write the planned experiment matrix for the report:
+
+```bash
+python scripts/generate_experiment_configs.py
+```
+
+This creates JSON config stubs under `artifacts/experiment_configs/`.
 
 ## Run Validation
 
@@ -105,6 +118,14 @@ This writes:
 
 - `artifacts/validation_predictions.json`
 - `artifacts/per_question.csv`
+
+Inspect the hardest failures by question and database:
+
+```bash
+python scripts/diagnose_predictions.py \
+  --predictions artifacts/validation_predictions.json \
+  --per_question artifacts/per_question.csv
+```
 
 ## Packaging Notes
 

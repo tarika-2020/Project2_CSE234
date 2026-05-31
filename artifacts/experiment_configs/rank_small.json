@@ -1,0 +1,7 @@
+{
+  "name": "rank_small",
+  "dataset_variant": "filtered",
+  "learning_rate": 0.0002,
+  "lora_r": 8,
+  "num_train_epochs": 3.0
+}

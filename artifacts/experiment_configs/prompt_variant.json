@@ -1,0 +1,8 @@
+{
+  "name": "prompt_variant",
+  "dataset_variant": "filtered",
+  "learning_rate": 0.0002,
+  "lora_r": 16,
+  "num_train_epochs": 3.0,
+  "prompt_variant": "compact_instruction"
+}
