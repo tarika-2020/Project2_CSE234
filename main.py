@@ -24,24 +24,62 @@ def load_json_file(path: str):
         return json.load(f)
 
 
+def should_use_fallback_links(
+    cleaned_links: Dict[str, List[str]],
+    fallback_links: Dict[str, List[str]],
+    filtered,
+    heuristic_links: Dict[str, List[str]],
+    retrieval_links: Dict[str, List[str]],
+) -> bool:
+    if not fallback_links:
+        return False
+    if not cleaned_links:
+        return True
+
+    supported_tables = {
+        table
+        for table in cleaned_links
+        if table in heuristic_links or table in retrieval_links
+    }
+    predicted_tables = len(cleaned_links)
+    predicted_columns = sum(len(columns) for columns in cleaned_links.values())
+
+    if not supported_tables:
+        return True
+    if filtered.fallback_used:
+        return True
+    if predicted_columns >= 7:
+        return True
+    if predicted_tables >= 4:
+        return True
+    return False
+
+
 def predict_question(question: str, db_id: str, schema, backend, retriever) -> Dict[str, List[str]]:
     filtered = filter_schema(question, schema)
     prompt = build_prompt(question, db_id, schema, filtered)
     heuristic_links = heuristic_schema_links(question, schema, filtered)
     retrieval_links = retriever.predict(question, db_id, schema, filtered) if retriever else {}
+    fallback_links = merge_predictions(retrieval_links, heuristic_links)
 
     if isinstance(backend, HeuristicBackend):
-        return merge_predictions(retrieval_links, heuristic_links)
+        return fallback_links
 
     generation = backend.generate([prompt])[0]
     try:
         parsed = parse_schema_links(generation.text)
         cleaned = validate_and_canonicalize_links(parsed, schema)
-        if cleaned:
+        if not should_use_fallback_links(
+            cleaned,
+            fallback_links,
+            filtered,
+            heuristic_links,
+            retrieval_links,
+        ):
             return cleaned
     except Exception:
         pass
-    return merge_predictions(retrieval_links, heuristic_links)
+    return fallback_links
 
 
 def main() -> None:
