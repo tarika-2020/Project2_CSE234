@@ -8,9 +8,11 @@ Submission-ready schema-linking pipeline for CSE/DSC 234 Project 2.
 - `schemas/`: release schemas copied to the repo root
 - `src/schema_linking/`: shared loading, filtering, prompting, decoding, and fallback logic
 - `scripts/prepare_data.py`: builds SFT-ready JSONL datasets
+- `scripts/build_training_data_variants.py`: creates augmented and balanced JSON training sets
 - `scripts/train_qlora.py`: local QLoRA training entrypoint
 - `scripts/run_validation.py`: runs validation inference and grading
 - `scripts/eval_predictions.py`: wrapper around the provided `eval.py`
+- `scripts/eval_custom_metrics.py`: computes an additional join-coverage diagnostic
 - `adapter/`: place the final PEFT adapter here
 - `artifacts/`: generated outputs
 - `logs/`: experiment logs
@@ -94,6 +96,25 @@ This writes files under `artifacts/prepared/`, including:
 - `train_full_schema.jsonl`
 - `validation_full_schema.jsonl`
 
+Generate optional custom JSON training variants:
+
+```bash
+.\.venv\Scripts\python scripts/build_training_data_variants.py
+```
+
+This writes files under `artifacts/custom_training_data/`, including:
+
+- `augmented_train.json`
+- `balanced_train.json`
+- `augmented_balanced_train.json`
+- `training_mix_summary.json`
+
+Current custom data strategy:
+
+- deterministic paraphrase augmentation over the released train split
+- oversampling for underrepresented databases
+- extra weight for multi-table examples
+
 ## Train QLoRA Adapter
 
 Example command:
@@ -145,6 +166,13 @@ Inspect the hardest failures by question and database:
 .\.venv\Scripts\python scripts/diagnose_predictions.py \
   --predictions artifacts/validation_predictions.json \
   --per_question artifacts/per_question.csv
+```
+
+Compute the custom join-coverage diagnostic:
+
+```bash
+.\.venv\Scripts\python scripts/eval_custom_metrics.py \
+  --predictions artifacts/final_validation_predictions_best_adapter.json
 ```
 
 ## Packaging Notes
