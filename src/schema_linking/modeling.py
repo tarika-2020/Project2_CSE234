@@ -30,6 +30,7 @@ class TransformersBackend(GenerationBackend):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.max_new_tokens = max_new_tokens
+        self.disable_thinking = "qwen3" in base_model.lower()
         self.tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -47,7 +48,23 @@ class TransformersBackend(GenerationBackend):
 
         self.model = model.eval()
 
+    def _prepare_prompts(self, prompts: List[str]) -> List[str]:
+        if not self.disable_thinking or not hasattr(self.tokenizer, "apply_chat_template"):
+            return prompts
+        rendered = []
+        for prompt in prompts:
+            rendered.append(
+                self.tokenizer.apply_chat_template(
+                    [{"role": "user", "content": prompt}],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            )
+        return rendered
+
     def generate(self, prompts: List[str]) -> List[GenerationResult]:
+        prompts = self._prepare_prompts(prompts)
         batch = self.tokenizer(
             prompts,
             return_tensors="pt",
