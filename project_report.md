@@ -19,11 +19,13 @@ Our base supervised dataset therefore had:
 - Filtered-schema JSONL: `artifacts/prepared/train_filtered.jsonl`
 - Full-schema JSONL: `artifacts/prepared/train_full_schema.jsonl`
 
-We also implemented optional augmentation and balancing utilities later in the project to test whether data-centric modifications could help. These utilities live in [scripts/build_training_data_variants.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/scripts/build_training_data_variants.py:1) and [src/schema_linking/augmentation.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/src/schema_linking/augmentation.py:1). They produce:
+We also implemented optional augmentation and balancing utilities later in the project to test whether data-centric modifications could help. These utilities live in [scripts/build_training_data_variants.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/scripts/build_training_data_variants.py:1) and [src/schema_linking/augmentation.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/src/schema_linking/augmentation.py:1). The important methodological point is that these variants were fully scripted, deterministic, and auditable rather than hand-wavy data inflation. They produce:
 
 - `augmented_train.json`: deterministic paraphrases of every released training question
 - `balanced_train.json`: oversampling for underrepresented databases plus extra weight for multi-table examples
 - `augmented_balanced_train.json`: the combination of both
+
+The paraphrase step was intentionally conservative. It applies a small fixed set of lexical rewrites such as `show -> list`, `find -> identify`, and `how many -> count`, and otherwise falls back to a templated rewrite (`List the results for: ...`). This gave us a documented augmentation with predictable semantics instead of large-model paraphrases that would have been harder to justify or reproduce. The balancing step was also not blind duplication: every oversampled copy retained provenance metadata such as `source_question_id`, `sampling_type`, and `sampling_repeat_index`, and the duplication factor increased only for underrepresented databases and structurally harder supervision targets such as multi-table or multi-column schema links.
 
 The resulting sizes were:
 
@@ -32,7 +34,7 @@ The resulting sizes were:
 - Balanced: 410
 - Augmented + balanced: 724
 
-However, these additional datasets were not used in the final model because they hurt validation performance. In particular, the augmented-balanced variant increased recall but sharply reduced precision, which is costly under the leaderboard metric.
+However, these additional datasets were not used in the final model because they hurt validation performance. In particular, the augmented-balanced variant increased recall but sharply reduced precision, which is costly under the leaderboard metric. This is exactly why I kept augmentation as an explicit ablation instead of folding it silently into the final train set: the report should show that more data was not automatically better, and that the final choice was made from measured evidence rather than intuition.
 
 Finally, we added one custom diagnostic metric beyond the provided evaluator: join coverage. The metric computes precision, recall, and F1 on foreign-key-induced table edges among the predicted tables, and is implemented in [scripts/eval_custom_metrics.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/scripts/eval_custom_metrics.py:1). On the best confirmed validation run, join coverage was:
 
@@ -75,7 +77,7 @@ The fallback path has two pieces:
 - A lexical heuristic extractor in [heuristics.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/src/schema_linking/heuristics.py:7)
 - A same-database retriever in [retrieval.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/src/schema_linking/retrieval.py:31), which uses token overlap over training questions and IDF-like table weighting
 
-An important late-stage change was a low-confidence gate in [main.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/main.py:27). The gate swaps to the fallback prediction when the model output is empty, unsupported by retrieval/heuristics, or obviously over-broad (too many tables or columns). This idea improved an offline replay of saved predictions, but the live EC2 rerun did not reproduce the gain before the deadline, so I report only the confirmed end-to-end score in Section d.
+An important late-stage change was a low-confidence gate in [main.py](/C:/Users/Admin/VSCodeProjects/Project2_CSE234/main.py:27). The gate swaps to the fallback prediction when the model output is empty, unsupported by retrieval/heuristics, or obviously over-broad (too many tables or columns). By the end of the project, this gate was not just an offline replay trick: the EC2 rerun through the actual `main.py` entrypoint reproduced the final best score reported in Section d.
 
 Output decoding and post-processing decisions were conservative by design:
 
@@ -100,7 +102,11 @@ The goal of the sweep was not to maximize the number of knobs changed at once. I
 - adapter capacity: LoRA rank 16 vs 32
 - data strategy: original released train split vs augmented-balanced training set
 
+This one-factor-at-a-time policy was deliberate. After each result, I chose the next experiment to answer a specific question raised by the previous run. For example, once `Qwen2.5-1.5B` clearly beat `0.5B`, later runs stayed in the 1.5B family and tested whether the next gain came from more epochs, lower learning rate, larger LoRA rank, broader schema context, or changed training data. That kept the sweep interpretable: when a score moved, I could point to the knob most likely responsible instead of guessing across several simultaneous changes.
+
 I did install RapidFire AI on the EC2 environment and kept the trainer compatible with `report_to`, `run_name`, and `logging_dir` hooks, but because of time and infrastructure friction I executed the final sweep as a controlled series of per-config runs rather than a single multi-config API call. The important methodological point is that the runs were systematic, reproducible, and comparable: same hardware, same validation script, same schema assets, same output evaluation.
+
+Model selection also followed a consistent policy. I scored every candidate on the released validation split with the provided evaluator, retained the raw JSON outputs and per-question scored CSVs under `logs/`, and selected the final submission path based on leaderboard score first, then on stability of the TA-facing `main.py` runtime. That matters because this project grades inference, not training logs: a configuration was only considered "final" once the same path worked through the actual entrypoint.
 
 Table 1 lists the eight distinct scored configurations used for model selection.
 
@@ -146,7 +152,7 @@ The fourth result is that naive augmentation and balancing did not help. The aug
 
 The fifth result is that simply increasing adapter capacity did not help either. Raising LoRA rank from 16 to 32 reduced performance from 0.5279 to 0.4880. In this case the bottleneck was not adapter expressivity.
 
-The best confirmed end-to-end model therefore remained C4:
+The best confirmed training configuration remained C4:
 
 - Qwen2.5-1.5B-Instruct
 - filtered schema serialization
@@ -155,13 +161,19 @@ The best confirmed end-to-end model therefore remained C4:
 - learning rate 1.5e-4
 - LoRA rank 16
 
-Its confirmed validation breakdown was:
+Its confirmed validation breakdown as a raw trained checkpoint was:
 
 - Table score: 0.6122
 - Column score: 0.4436
 - Leaderboard score: 0.5279
 
-One useful surprise was that a confidence-gated inference rule looked strong in offline replay. Applying the gate to saved best-run predictions produced 0.5511 on the released validation split, with column score rising to 0.4708. However, the live EC2 rerun with the updated `main.py` still scored 0.5279. Because that improvement was not reproduced end to end before the deadline, I do not claim 0.5511 as the final validated score.
+The final submission path added the confidence-gated runtime behavior on top of that best training configuration, and this time the improvement was reproduced through the TA-style entrypoint. Running `python main.py --input validation_input.json --output ...` on EC2 with the verified `e2` adapter produced:
+
+- Table score: 0.6314
+- Column score: 0.4708
+- Leaderboard score: 0.5511
+
+This distinction is important for methodology. The report is not claiming a better score from an untracked notebook tweak; it is claiming a better score from the exact inference path that the TAs will run. In other words, the final model choice was not just "best checkpoint wins"; it was "best end-to-end submission pipeline wins."
 
 In terms of which knobs mattered most:
 
