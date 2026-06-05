@@ -12,6 +12,7 @@ if SRC_DIR not in sys.path:
 
 from schema_linking.decoding import parse_schema_links, validate_and_canonicalize_links
 from schema_linking.filtering import filter_schema
+from schema_linking.gating import should_use_fallback_links
 from schema_linking.heuristics import heuristic_schema_links
 from schema_linking.modeling import HeuristicBackend, build_generation_backend
 from schema_linking.prompting import build_prompt
@@ -22,37 +23,6 @@ from schema_linking.schema_utils import load_schema
 def load_json_file(path: str):
     with open(path, encoding="utf-8-sig") as f:
         return json.load(f)
-
-
-def should_use_fallback_links(
-    cleaned_links: Dict[str, List[str]],
-    fallback_links: Dict[str, List[str]],
-    filtered,
-    heuristic_links: Dict[str, List[str]],
-    retrieval_links: Dict[str, List[str]],
-) -> bool:
-    if not fallback_links:
-        return False
-    if not cleaned_links:
-        return True
-
-    supported_tables = {
-        table
-        for table in cleaned_links
-        if table in heuristic_links or table in retrieval_links
-    }
-    predicted_tables = len(cleaned_links)
-    predicted_columns = sum(len(columns) for columns in cleaned_links.values())
-
-    if not supported_tables:
-        return True
-    if filtered.fallback_used:
-        return True
-    if predicted_columns >= 7:
-        return True
-    if predicted_tables >= 4:
-        return True
-    return False
 
 
 def predict_question(question: str, db_id: str, schema, backend, retriever) -> Dict[str, List[str]]:
