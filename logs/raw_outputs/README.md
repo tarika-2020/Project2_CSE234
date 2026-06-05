@@ -5,61 +5,103 @@ replay runs.
 
 ## File-to-Run Mapping
 
-- `validation_predictions.json`
-  - Run type: local heuristic/fallback validation output
-  - Main knobs: no adapter loaded, deterministic fallback path only
-  - Purpose: baseline raw JSON for the heuristic pipeline
+Scored experiment configs and their raw JSON outputs:
 
-- `validation_predictions_venv.json`
-  - Run type: local `.venv` validation output
-  - Main knobs: same fallback-style runtime, different local environment
-  - Purpose: environment-specific validation replay
+- `C1` -> `validation_predictions_ec2_qwen25_0p5b_filtered_e1.json`
+  - Base model: `Qwen/Qwen2.5-0.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 1
+  - Learning rate: `2e-4`
+  - LoRA rank: 16
 
-- `venv_validation_predictions.json`
-  - Run type: local `.venv` validation output from a later replay
-  - Main knobs: same validation input, local environment replay
-  - Purpose: repeated local validation artifact kept for debugging
+- `C2` -> `validation_predictions_ec2_qwen25_0p5b_filtered_lr1e4.json`
+  - Base model: `Qwen/Qwen2.5-0.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 1
+  - Learning rate: `1e-4`
+  - LoRA rank: 16
 
-- `final_validation_predictions.json`
-  - Run type: final local fallback validation output
-  - Main knobs: deterministic heuristic/retrieval path
-  - Purpose: final saved raw JSON for the non-adapter baseline
+- `C3` -> `validation_predictions_ec2_qwen25_1p5b_filtered_e1.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 1
+  - Learning rate: `2e-4`
+  - LoRA rank: 16
 
-- `final_validation_predictions_best_adapter.json`
-  - Run type: best adapter raw predictions before confidence gating
-  - Corresponding model knobs:
-    - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
-    - Schema variant: filtered
-    - Train set: original
-    - Epochs: 2
-    - Learning rate: `1.5e-4`
-    - LoRA rank: 16
-  - Purpose: primary model output before fallback gating
+- `C4` -> `final_validation_predictions_best_adapter.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 2
+  - Learning rate: `1.5e-4`
+  - LoRA rank: 16
 
-- `final_validation_predictions_best_adapter_gated.json`
-  - Run type: best adapter predictions after confidence gating
-  - Corresponding model knobs:
-    - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
-    - Schema variant: filtered
-    - Train set: original
-    - Epochs: 2
-    - Learning rate: `1.5e-4`
-    - LoRA rank: 16
-    - Inference change: confidence-gated fallback swapping
-  - Purpose: strongest saved validation output
+- `C5` -> `validation_predictions_ec2_qwen25_1p5b_filtered_e5_lr15e5.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 5
+  - Learning rate: `1.5e-4`
+  - LoRA rank: 16
+
+- `C6` -> `validation_predictions_ec2_qwen25_1p5b_full_e5_lr15e5.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: full
+  - Train set: original
+  - Epochs: 5
+  - Learning rate: `1.5e-4`
+  - LoRA rank: 16
+
+- `C7` -> `validation_predictions_ec2_qwen25_1p5b_augbalanced_filtered_e2_lr15e5.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: augmented-balanced
+  - Epochs: 2
+  - Learning rate: `1.5e-4`
+  - LoRA rank: 16
+
+- `C8` -> `validation_predictions_ec2_qwen25_1p5b_filtered_e2_lr15e5_r32.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 2
+  - Learning rate: `1.5e-4`
+  - LoRA rank: 32
+
+- `F1` -> `final_validation_predictions_best_adapter_gated.json`
+  - Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+  - Schema variant: filtered
+  - Train set: original
+  - Epochs: 2
+  - Learning rate: `1.5e-4`
+  - LoRA rank: 16
+  - Inference change: confidence-gated fallback swapping
   - Verified score: `0.5511`
 
+Other local replay/debug raw outputs in this folder:
+
+- `validation_predictions.json`
+  - Local heuristic/fallback validation output
+
+- `validation_predictions_venv.json`
+  - Local `.venv` validation replay
+
+- `venv_validation_predictions.json`
+  - Later local `.venv` validation replay
+
+- `final_validation_predictions.json`
+  - Final local fallback validation output
+
+- `final_validation_predictions_best_adapter.json`
+  - Saved best adapter raw predictions before fallback gating
+
 - `composed_gated_predictions.json`
-  - Run type: reproduced composed version of the gated best output
-  - Corresponding knobs:
-    - Same primary model as `final_validation_predictions_best_adapter.json`
-    - Same fallback source as `final_validation_predictions.json`
-    - Same gate logic as the runtime fallback gate
-  - Purpose: reproducible reconstruction of the `0.5511` gated output
+  - Reproduced composed version of the gated best output
 
 ## Notes
 
-- Not every experiment listed in `logs/experiment_results.csv` has a raw JSON
-  output in this folder, because several runs were executed on EC2 and only
-  their final scores were retained locally.
 - The full scored experiment table is in `logs/experiment_results.csv`.
+- The main scored config outputs are the `C1` through `C8` and `F1` mappings above.
