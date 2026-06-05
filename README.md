@@ -5,7 +5,11 @@ Submission-ready schema-linking pipeline for CSE/DSC 234 Project 2.
 ## Repo Layout
 
 - `main.py`: TA-facing inference entrypoint
+- `README.md`: setup and packaging instructions for the final repo
 - `schemas/`: release schemas copied to the repo root
+- `logs/`: experiment summaries plus copied raw/scored validation outputs
+- `adapter/`: final PEFT adapter for the verified submission path
+- `validation_output_final.json`: cleanly named released-validation output from the final pipeline
 - `src/schema_linking/`: shared loading, filtering, prompting, decoding, and fallback logic
 - `scripts/prepare_data.py`: builds SFT-ready JSONL datasets
 - `scripts/build_training_data_variants.py`: creates augmented and balanced JSON training sets
@@ -80,6 +84,7 @@ Important runtime behavior:
 - If `adapter/adapter_config.json` exists and the ML stack is installed, the runtime loads the public base model and attaches the local adapter.
 - If the adapter is missing or the ML stack is unavailable, the runtime falls back to a deterministic two-stage heuristic pipeline.
 - Output never includes `db_id`.
+- The committed top-level `adapter/` is the verified `ec2_qwen25_1p5b_filtered_e2_lr15e5` adapter state.
 
 ## Prepare Training Data
 
@@ -177,26 +182,41 @@ Compute the custom join-coverage diagnostic:
 
 ## Packaging Notes
 
-- Keep the final learned PEFT adapter in `adapter/`.
-- Keep `schemas/` at the repo root.
-- Keep experiment outputs and logs in `logs/`.
-- The base model is expected to be pulled from HuggingFace Hub at runtime; the adapter remains local to the repo.
+The final repo is intended to be zipped with these required top-level items present:
+
+- `main.py`
+- `README.md`
+- `schemas/`
+- `logs/`
+- `adapter/`
+
+Additional final submission artifacts kept in this repo:
+
+- `validation_output_final.json`: released-validation output from the final verified pipeline
+
+Model-loading choice:
+
+- Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+- Adapter path: `./adapter`
+- Adapter type: PEFT LoRA / QLoRA
+
+The base model is pulled from HuggingFace Hub at runtime and the local adapter is attached through PEFT.
 
 ## Current Status
 
-Implemented now:
+Included now:
 
 - reusable schema loader and serializer
 - deterministic schema candidate filter
 - prompt builder
 - JSON extraction and schema-aware cleanup
 - TA-facing `main.py`
-- SFT data preparation script
-- local training script scaffold
-- validation/evaluation wrappers
+- final verified `adapter/` weights for the selected `e2` run
+- experiment summaries and copied run outputs in `logs/`
+- released-validation output in `validation_output_final.json`
 
-Not included yet:
+Verified final runtime path:
 
-- trained adapter weights
-- final report PDF
-- RapidFire experiment logs
+- Base model: `Qwen/Qwen2.5-1.5B-Instruct`
+- Adapter: `ec2_qwen25_1p5b_filtered_e2_lr15e5`
+- Validation leaderboard score: `0.5511`

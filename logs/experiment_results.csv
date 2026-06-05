@@ -1,0 +1,10 @@
+config_id,base_model,schema_variant,train_set,epochs,learning_rate,lora_r,score,table_score,column_score,status,notes
+C1,Qwen/Qwen2.5-0.5B-Instruct,filtered,original,1,2e-4,16,0.4314,,,,scored,EC2 filtered baseline
+C2,Qwen/Qwen2.5-0.5B-Instruct,filtered,original,1,1e-4,16,0.3943,,,,scored,Lower learning rate hurt performance
+C3,Qwen/Qwen2.5-1.5B-Instruct,filtered,original,1,2e-4,16,0.5139,,,,scored,First strong 1.5B baseline
+C4,Qwen/Qwen2.5-1.5B-Instruct,filtered,original,2,1.5e-4,16,0.5279,0.6122,0.4436,scored,Best raw model checkpoint before gating
+C5,Qwen/Qwen2.5-1.5B-Instruct,filtered,original,5,1.5e-4,16,0.4400,,,,scored,Overtrained filtered variant
+C6,Qwen/Qwen2.5-1.5B-Instruct,full,original,5,1.5e-4,16,0.3453,,,,scored,Full-schema prompting underperformed
+C7,Qwen/Qwen2.5-1.5B-Instruct,filtered,augmented-balanced,2,1.5e-4,16,0.4345,0.5129,0.3561,scored,Augmented-balanced training hurt precision
+C8,Qwen/Qwen2.5-1.5B-Instruct,filtered,original,2,1.5e-4,32,0.4880,0.5665,0.4096,scored,Higher LoRA rank underperformed
+F1,Qwen/Qwen2.5-1.5B-Instruct,filtered,original,2,1.5e-4,16,0.5511,0.6314,0.4708,selected,Direct main.py verification on EC2 with verified e2 adapter
