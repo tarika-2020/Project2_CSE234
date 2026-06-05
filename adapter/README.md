@@ -44,19 +44,3 @@ This model was trained with SFT.
 - Datasets: 4.8.5
 - Tokenizers: 0.22.2
 
-## Citations
-
-
-
-Cite TRL as:
-    
-```bibtex
-@misc{vonwerra2022trl,
-	title        = {{TRL: Transformer Reinforcement Learning}},
-	author       = {Leandro von Werra and Younes Belkada and Lewis Tunstall and Edward Beeching and Tristan Thrush and Nathan Lambert and Shengyi Huang and Kashif Rasul and Quentin Gallou{\'e}dec},
-	year         = 2020,
-	journal      = {GitHub repository},
-	publisher    = {GitHub},
-	howpublished = {\url{https://github.com/huggingface/trl}}
-}
-```
