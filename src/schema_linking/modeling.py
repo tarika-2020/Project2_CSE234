@@ -27,6 +27,7 @@ class TransformersBackend(GenerationBackend):
     name = "transformers"
 
     def __init__(self, base_model: str, adapter_dir: str, max_new_tokens: int):
+        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.max_new_tokens = max_new_tokens
@@ -34,10 +35,18 @@ class TransformersBackend(GenerationBackend):
         self.tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
+
+        torch_dtype = "auto"
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+            torch_dtype = torch.bfloat16
+        elif torch.cuda.is_available():
+            torch_dtype = torch.float16
 
         model = AutoModelForCausalLM.from_pretrained(
             base_model,
             device_map="auto",
+            torch_dtype=torch_dtype,
             trust_remote_code=True,
         )
 
@@ -64,24 +73,26 @@ class TransformersBackend(GenerationBackend):
         return rendered
 
     def generate(self, prompts: List[str]) -> List[GenerationResult]:
+        import torch
+
         prompts = self._prepare_prompts(prompts)
-        batch = self.tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-        ).to(self.model.device)
-        output = self.model.generate(
-            **batch,
-            max_new_tokens=self.max_new_tokens,
-            do_sample=False,
-            pad_token_id=self.tokenizer.pad_token_id,
-            eos_token_id=self.tokenizer.eos_token_id,
-        )
-        prompt_len = batch["input_ids"].shape[1]
+        batch = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True)
+        batch = {key: value.to(self.model.device) for key, value in batch.items()}
+        prompt_lengths = batch["attention_mask"].sum(dim=1).tolist()
+
+        with torch.inference_mode():
+            output = self.model.generate(
+                **batch,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+                use_cache=True,
+            )
+
         generations = []
-        for row in output:
-            new_tokens = row[prompt_len:]
+        for row, prompt_len in zip(output, prompt_lengths):
+            new_tokens = row[int(prompt_len) :]
             text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
             generations.append(GenerationResult(text=text, backend_name=self.name))
         return generations

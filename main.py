@@ -25,19 +25,35 @@ def load_json_file(path: str):
         return json.load(f)
 
 
-def predict_question(question: str, db_id: str, schema, backend, retriever) -> Dict[str, List[str]]:
+def prepare_question(question: str, db_id: str, schema, retriever):
     filtered = filter_schema(question, schema)
     prompt = build_prompt(question, db_id, schema, filtered)
     heuristic_links = heuristic_schema_links(question, schema, filtered)
     retrieval_links = retriever.predict(question, db_id, schema, filtered) if retriever else {}
     fallback_links = merge_predictions(retrieval_links, heuristic_links)
 
-    if isinstance(backend, HeuristicBackend):
-        return fallback_links
+    return {
+        "prompt": prompt,
+        "schema": schema,
+        "filtered": filtered,
+        "heuristic_links": heuristic_links,
+        "retrieval_links": retrieval_links,
+        "fallback_links": fallback_links,
+    }
 
-    generation = backend.generate([prompt])[0]
+
+def finalize_prediction(prepared, generation_text: str | None) -> Dict[str, List[str]]:
+    if generation_text is None:
+        return prepared["fallback_links"]
+
+    schema = prepared["schema"]
+    filtered = prepared["filtered"]
+    heuristic_links = prepared["heuristic_links"]
+    retrieval_links = prepared["retrieval_links"]
+    fallback_links = prepared["fallback_links"]
+
     try:
-        parsed = parse_schema_links(generation.text)
+        parsed = parse_schema_links(generation_text)
         cleaned = validate_and_canonicalize_links(parsed, schema)
         if not should_use_fallback_links(
             cleaned,
@@ -59,7 +75,7 @@ def main() -> None:
     parser.add_argument("--schemas_dir", default="./schemas")
     parser.add_argument("--adapter_dir", default="./adapter")
     parser.add_argument("--base_model", default="Qwen/Qwen2.5-1.5B-Instruct")
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--train_data", default="./train.json")
     args = parser.parse_args()
@@ -75,18 +91,40 @@ def main() -> None:
     if os.path.exists(args.train_data):
         retriever = SchemaLinkRetriever.from_json(args.train_data)
     schema_cache = {}
-    predictions = []
+    prepared_items = []
     for item in items:
         db_id = item["db_id"]
         if db_id not in schema_cache:
             schema_cache[db_id] = load_schema(args.schemas_dir, db_id)
-        links = predict_question(item["question"], db_id, schema_cache[db_id], backend, retriever)
-        predictions.append(
+        prepared = prepare_question(item["question"], db_id, schema_cache[db_id], retriever)
+        prepared_items.append(
             {
                 "question_id": item["question_id"],
-                "schema_links": links,
+                "prepared": prepared,
             }
         )
+
+    predictions = []
+    if isinstance(backend, HeuristicBackend):
+        for item in prepared_items:
+            predictions.append(
+                {
+                    "question_id": item["question_id"],
+                    "schema_links": item["prepared"]["fallback_links"],
+                }
+            )
+    else:
+        for start in range(0, len(prepared_items), max(1, args.batch_size)):
+            batch_items = prepared_items[start : start + max(1, args.batch_size)]
+            prompts = [item["prepared"]["prompt"] for item in batch_items]
+            generations = backend.generate(prompts)
+            for item, generation in zip(batch_items, generations):
+                predictions.append(
+                    {
+                        "question_id": item["question_id"],
+                        "schema_links": finalize_prediction(item["prepared"], generation.text),
+                    }
+                )
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(predictions, f, indent=2, ensure_ascii=False)
